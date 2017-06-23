@@ -1,0 +1,297 @@
+---
+title: "USo de la aplicación"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+
+library(mongolite)
+library(sqldf)
+library(gsubfn)
+library(proto)
+library(RSQLite)
+library(tcltk)
+
+library(jsonlite)
+library(stringr)
+library(ggplot2)
+
+source("Soporte.R")
+
+options(stringsAsFactors = FALSE)
+
+diasSemana<-c("lunes","martes","miércoles","jueves","viernes","sábado","domingo")
+coloresSemana<-c("red", "blue","pink","yellow","green", "orange","black")
+
+urlMongo <-"mongodb://localhost:27017/TFP"
+collection <- "logs"
+mongoDBconn<- mongo(collection, url = urlMongo )
+
+numSemanas <-mongoDBconn$find(
+  query = '{ "weekday" : { "$eq" : "lunes" } }', 
+  fields = '{"date" : true}'
+)
+numSemanas <- sqldf("SELECT count(*) from numSemanas group by date")
+n<- nrow(numSemanas)
+rm(numSemanas)
+
+```
+
+# 4.4.2.	Fases del proceso
+
+## 4.4.2.1.	Diferencia entre compras iniciadas y compras finalizadas
+
+### Compras iniciadas
+```{r}
+#Compras iniciadas
+comprasIniciadas <- mongoDBconn$find(
+  query = '{"tag" : { "$in" : [ "Fase2 inicio",
+            "Fase3 inicio"]  } }', 
+  fields = '{"tag" : true, "weekday" : true, "hora" : true}'
+)
+comprasIniciadas <- sqldf("select weekday as dia, hora, count(tag) as frequencia from comprasIniciadas group by weekday, hora")
+ggplot(data=comprasIniciadas, aes(x=hora, y=frequencia, group=dia, colour=dia)) +
+  geom_line() +
+  geom_point()+ scale_color_manual(values=coloresSemana)
+```
+
+### Compras finalizadas
+```{r}
+#Compras finalizadas
+comprasFinalizadas <- mongoDBconn$find(
+  query = '{"tag" : { "$in" : [ "Fase2 fin",
+            "Fase3 fin"]  } }', 
+  fields = '{"tag" : true, "weekday" : true, "hora" : true}'
+)
+
+comprasFinalizadas <- sqldf("select weekday as dia, hora, count(tag) as frequencia from comprasFinalizadas group by weekday, hora")
+
+
+ggplot(data=comprasFinalizadas, aes(x=hora, y=frequencia, group=dia, colour=dia)) +
+  geom_line() +
+  geom_point()+ scale_color_manual(values=coloresSemana)
+```
+
+### Diferencia
+```{r}
+
+diffCompras <- sqldf("Select comprasFinalizadas.dia, 
+      comprasFinalizadas.hora, comprasFinalizadas.frequencia as numfin,
+comprasIniciadas.frequencia as nuninicio
+      from comprasFinalizadas inner join comprasIniciadas 
+      on comprasIniciadas.hora = comprasFinalizadas.hora
+      and comprasIniciadas.dia = comprasFinalizadas.dia")
+
+diffCompras$numfin<- as.numeric(diffCompras$numfin)
+diffCompras$nuninicio<- as.numeric(diffCompras$nuninicio)
+diffCompras$diff<-diffCompras$nuninicio-diffCompras$numfin
+
+ggplot(data=diffCompras, aes(x=hora, y=diff, group=dia, colour=dia)) +
+  geom_line() +
+  geom_point()+ scale_color_manual(values=coloresSemana)
+```
+
+```{r}
+peticiones<- diffCompras
+peticiones$numfin<-NULL
+peticiones$nuninicio<-NULL
+names(peticiones)[names(peticiones)=="diff"] <- "frecuencia"
+tablaDias<- ordenarPorDiaSemanafreq(diasSemana,peticiones,n)
+tablaDias
+```
+
+Estadisticos descriptivos
+```{r}
+summary(tablaDias)
+sd(tablaDias)
+
+```
+
+Barplot semanal
+```{r}
+barplot(tablaDias, col=rgb(0,1,0,1/2)
+        ,main = "Media de compras no finalizadas por dia"
+        , xlab="Día"
+        , ylab="Compras no finalizadas")
+```
+
+
+Correlación entre compras no finalizadas y errores detectados en el sistema
+
+```{r}
+#	Correlación entre compras no finalizadas y errores detectados en el sistema.
+#-----------------
+
+#Recupero los errores
+errores <- mongoDBconn$find(
+  query = '{ "level" : { "$eq" : "ERROR" } }', 
+  fields = '{"weekday" : true, "hora" : true, "time" : true, "tag":true, "idObject": true}'
+)
+
+#Agrupo por dia y hora
+freqErrores <- sqldf("SELECT weekday as dia, hora, count(*) as frecuencia  from errores group by weekday,hora")
+freqErrores$frecuencia<-freqErrores$frecuencia/n 
+
+#Añado los errores al dataframe
+diffCompras2<-sqldf("SELECT diffCompras.*,freqErrores.frecuencia as errores
+                  from diffCompras 
+                  inner join freqErrores on freqErrores.dia=diffCompras.dia 
+                   and freqErrores.hora=diffCompras.hora")
+
+head(diffCompras2)
+#Elimino las columnas no necesarias para el calculo de correlaciones
+diffCompras2$dia<-NULL
+diffCompras2$hora<-NULL
+diffCompras2$nuninicio<-NULL
+diffCompras2$numfin<-NULL
+
+cor(diffCompras2)
+
+ggplot(diffCompras2, aes(x=errores, y=diff)) +
+  geom_point(shape=1)  + xlab("trazas de error")  + ylab("compras no finalizadas") +  
+  geom_smooth()  +  ggtitle("Correlación entre las variables: compras no finalizadas y trazas de error")       
+
+```
+
+Correlación entre compras no finalizadas y errores detectados en el sistema el sábado.
+```{r}
+#	Correlación entre compras no finalizadas y errores detectados en el sistema.en SABADO
+#-----------------
+#Recupero los errores
+errores <- mongoDBconn$find(
+  query = '{ "level" : { "$eq" : "ERROR" } }', 
+  fields = '{"weekday" : true, "hora" : true, "time" : true, "tag":true, "idObject": true}'
+)
+
+#Agrupo por dia y hora
+freqErrores <- sqldf("SELECT weekday as dia, hora, count(*) as frecuencia  from errores group by weekday,hora")
+freqErrores$frecuencia<-freqErrores$frecuencia/n 
+
+#Añado los errores al dataframe
+diffCompras2<-sqldf("SELECT diffCompras.*,freqErrores.frecuencia as errores
+                  from diffCompras 
+                  inner join freqErrores on freqErrores.dia=diffCompras.dia 
+                   and freqErrores.hora=diffCompras.hora")
+
+
+head(diffCompras2)
+diffCompras2<- diffCompras2[diffCompras$dia == "sábado",]
+head(diffCompras2)
+
+#Elimino las columnas no necesarias para el calculo de correlaciones
+diffCompras2$dia<-NULL
+diffCompras2$hora<-NULL
+diffCompras2$nuninicio<-NULL
+diffCompras2$numfin<-NULL
+
+cor(diffCompras2)
+
+ggplot(diffCompras2, aes(x=errores, y=diff)) +
+  geom_point(shape=1)  + xlab("trazas de error")  + ylab("compras no finalizadas") +  
+  geom_smooth()  +  ggtitle("Correlación entre las variables: compras no finalizadas y trazas de error")       
+
+
+
+```
+
+
+Correlación entre las compras iniciadas, las no finalizadas y su diferencia.
+```{r}
+datos <- mongoDBconn$find('{}')
+peticiones <- sqldf("SELECT weekday as dia, hora, count(*) as frecuencia  from datos group by weekday,hora")
+rm(datos)
+peticiones<- sqldf("SELECT peticiones.dia, peticiones.hora, peticiones.frecuencia
+       ,diffCompras.diff
+       from peticiones 
+       inner join diffCompras on peticiones.dia = diffCompras.dia and peticiones.hora = diffCompras.hora ")
+
+head(peticiones)
+#Elimino las colimnas no necesarias
+peticiones$dia<-NULL
+peticiones$hora<-NULL
+
+cor(peticiones)
+
+plot(peticiones$frecuencia~peticiones$diff, ylab = "Peticiones", xlab="Compras sin finalizar")
+abline(lm(peticiones$frecuencia~peticiones$diff))
+
+```
+
+
+
+
+## 4.4.2.2.	Duración de las fases
+
+```{r}
+
+#Fase 1
+fase1 <- mongoDBconn$find(
+  query = '{ "tag" : { "$in" : [  "Fase1 inicio", "Fase1 fin"]  } }', 
+  fields = '{"weekday" : true, "hora" : true, "time" : true, "tag":true, "idObject": true}'
+)
+duracionFase1 <- sqldf("Select finicio.idObject, finicio.time as inicioF1  
+      ,ffin.time as finF1
+      from fase1 as finicio 
+      inner join fase1 as ffin on finicio.idObject = ffin.idObject and ffin.tag='Fase1 fin'
+      where finicio.tag='Fase1 inicio' group by finicio.idObject
+")
+rm(fase1)
+
+duracionFase1["duracionF1"]<-NA
+duracionFase1$duracionF1<-as.numeric(strptime(duracionFase1$finF1, format = "%H:%M:%S") 
+                              - strptime(duracionFase1$inicioF1, format = "%H:%M:%S"))
+#Fase 2
+fase2 <- mongoDBconn$find(
+  query = '{ "tag" : { "$in" : [  "Fase2 inicio", "Fase2 fin"]  } }', 
+  fields = '{"weekday" : true, "hora" : true, "time" : true, "tag":true, "idObject": true}'
+)
+duracionFase2 <- sqldf("Select finicio.idObject, finicio.time as inicioF2  
+                       ,ffin.time as finF2
+                       from fase2 as finicio 
+                       inner join fase2 as ffin on finicio.idObject = ffin.idObject and ffin.tag='Fase2 fin'
+                       where finicio.tag='Fase2 inicio' group by finicio.idObject
+                       ")
+
+rm(fase2)
+duracionFase2["duracionF2"]<-NA
+duracionFase2$duracionF2<-as.numeric(strptime(duracionFase2$finF2, format = "%H:%M:%S") 
+                                     - strptime(duracionFase2$inicioF2, format = "%H:%M:%S"))
+duracionFase2 <- duracionFase2[!(duracionFase2$duracionF2 < 0),]
+
+#Fase 3
+fase3 <- mongoDBconn$find(
+  query = '{ "tag" : { "$in" : [  "Fase3 inicio", "Fase3 .1 OK"]  } }', 
+  fields = '{"weekday" : true, "hora" : true, "time" : true, "tag":true, "idObject": true}'
+)
+duracionFase3 <- sqldf("Select finicio.idObject, finicio.time as inicioF3  
+                       ,ffin.time as finF3
+                       from fase3 as finicio 
+                       inner join fase3 as ffin on finicio.idObject = ffin.idObject and ffin.tag='Fase3 .1 OK'
+                       where finicio.tag='Fase3 inicio' group by finicio.idObject
+                       ")
+rm(fase3)
+duracionFase3["duracionF3"]<-NA
+duracionFase3$duracionF3<-as.numeric(strptime(duracionFase3$finF3, format = "%H:%M:%S") 
+                                     - strptime(duracionFase3$inicioF3, format = "%H:%M:%S"))
+
+#Se unen los 3 dataframes
+fases<- merge(x = duracionFase1, y = duracionFase2, by = "idObject", all = TRUE)
+fases<- merge(x = fases, y = duracionFase3, by = "idObject", all = TRUE)
+
+head(fases)
+```
+
+Estadisticos descriptivos
+```{r}
+summary(fases)
+```
+
+
+
+Cierro conexion
+```{r}
+rm(mongoDBconn)
+```
+

@@ -1,0 +1,24 @@
+[ePagoApp] [INFO] 2017-04-17 00:00:14,017 [CompraWebservice.validarDatos(231)]  Inicio validar datos
+[ePagoApp] [INFO] 2017-04-17 00:00:14,018 [CompraWebservice.validarDatos(259)]  validarDatos: Se ha recuperado el objeto Compra de la session con id=20170416235923061
+[ePagoApp] [INFO] 2017-04-17 00:00:14,018 [CompraWebservice.validarDatos(326)]  Se procede a validar contra backend la identificacion de la comra con id=20170416235923061
+[ePagoApp] [INFO] 2017-04-17 00:00:14,018 [CompraServiceImpl.validarDatosEntrada(137)]    Inicio datos del usuario para la compra(20170416235923061) con sessionId=155D82EEDF7804948F6D09E0AC3D7EFE@ePagoAPP
+[ePagoApp] [INFO] 2017-04-17 00:00:16,181 [WebservicesHelper.conectar(351)]         Result 200 for action /ValidationWS/Check on endpoint https://ws.empresa.com:100/ValidationWS/Open  time: 2159ms
+[ePagoApp] [INFO] 2017-04-17 00:00:16,182 [CompraServiceImpl.validarDatosEntrada(297)]    Fin datos del usuario para la compra(20170416235923061) con sessionId=155D82EEDF7804948F6D09E0AC3D7EFE@ePagoAPP
+[ePagoApp] [INFO] 2017-04-17 00:00:16,183 [CompraWebservice.validarDatos(552)]  Validar datos del usuario de la compra (20170416235923061) con resultado OK
+[ePagoApp] [INFO] 2017-04-17 00:00:16,185 [CompraWebservice.validarDatos(266)]  Se ha identificado correctamente la compra con id=20170416235923061
+[ePagoApp] [INFO] 2017-04-17 00:00:16,185 [CompraWebservice.validarDatos(390)]  Fin validar datos
+[ePagoApp] [INFO] 2017-04-17 00:00:48,985 [CompraWebservice.validarSMS(166)]  Inicio validar SMS
+[ePagoApp] [INFO] 2017-04-17 00:00:48,987 [CompraWebservice.validarSMS(173)]  Se va a validar el codigo SMS de la Compra con id=20170416235923061
+[ePagoApp] [INFO] 2017-04-17 00:00:48,987 [CompraWebservice.validarSMS(203)]  Se procede a validar contra host la identificacion de la comra con id=20170416235923061
+[ePagoApp] [INFO] 2017-04-17 00:00:50,193 [WebservicesHelper.conectar(351)]         Result 200 for action /ValidationWS/SMSCheck on endpoint https://ws.empresa.com:100/ValidationWS/SMSCheck  time: 1200ms
+[ePagoApp] [INFO] 2017-04-17 00:00:50,329 [WebservicesHelper.conectar(351)]         Result 200 for action /ValidationWS/Pago on endpoint https://ws.empresa.com:100/ValidationWS/Pago  time: 131ms
+[ePagoApp] [INFO] 2017-04-17 00:00:50,331 [CompraWebservice.validarSMS(245)]  Validar SMS de la compra (20170416235923061) con resultado OK
+[ePagoApp] [INFO] 2017-04-17 00:00:50,333 [RetornoHelper.generarRespuestaXML(49)]         xmlResponse generado para la compra(20170416235923061):%3CAuthenticationIssuerResponse+id%3D%2220170416235923061%22%3E%3CVersion%3E3.0%3C%2FVersion%3E%3CCsb%3E0019%3C%2FCsb%3E%3CStatus%3EOK%3C%2FStatus%3E%3CSasSignature%3Eccd13988224e065bfd66197fdfa876e1c9a9efbe%3C%2FSasSignature%3E%3C%2FAuthenticationIssuerResponse%3E 
+[ePagoApp] [INFO] 2017-04-17 00:00:50,334 [CompraWebservice.validarSMS(314)]  Se redirige el flujo a=https://portal.empresa.com/resultado
+[ePagoApp] [INFO] 2017-04-17 00:00:50,334 [CompraServiceImpl.logout(198)]    Inicio logout para la sessionid:155D82EEDF7804948F6D09E0AC3D7EFE@ePagoAPP
+[ePagoApp] [INFO] 2017-04-17 00:00:50,534 [WebservicesHelper.conectar(351)]         Result 200 for action /ValidationWS/Logout on endpoint https://ws.empresa.com:100/ValidationWS/Logout time: 193ms
+[ePagoApp] [INFO] 2017-04-17 00:00:50,534 [CompraServiceImpl.logout(203)]    Fin logout para la sessionid:155D82EEDF7804948F6D09E0AC3D7EFE@ePagoAPP
+[ePagoApp] [INFO] 2017-04-17 00:00:50,535 [CompraWebservice.invalidarIDSession(1040)]  Invalidar session servidor
+[ePagoApp] [INFO] 2017-04-17 00:00:50,535 [CompraWebservice.validarSMS(331)]  Se identificado satistactoriamente la compra con id=20170416235923061
+[ePagoApp] [INFO] 2017-04-17 00:00:50,535 [CompraWebservice.validarSMS(437)]  Fin validarSMS
+[ePagoApp] [INFO] 2017-04-17 16:38:27,560 [WebservicesHelper.conectar(351)]         Result 200 for action /ValidationWS/Logout on endpoint https://ws.empresa.com:100/ValidationWS/Logout time: 122ms

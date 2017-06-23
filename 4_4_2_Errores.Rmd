@@ -1,0 +1,200 @@
+---
+title: "Errores producidos"
+author: "UOC - Master BI - Treball final de postgrau (Jaume Balagué Sans)"
+date: "Mayo del 2017"
+output: html_document
+
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+
+library(mongolite)
+library(sqldf)
+library(gsubfn)
+library(proto)
+library(RSQLite)
+library(tcltk)
+
+library(jsonlite)
+library(stringr)
+library(ggplot2)
+
+source("Soporte.R")
+
+diasSemana<-c("lunes","martes","miércoles","jueves","viernes","sábado","domingo")
+coloresSemana<-c("red", "blue","pink","yellow","green", "orange","black")
+
+urlMongo <-"mongodb://localhost:27017/TFP"
+collection <- "logs"
+mongoDBconn<- mongo(collection, url = urlMongo )
+
+numSemanas <-mongoDBconn$find(
+  query = '{ "weekday" : { "$eq" : "lunes" } }', 
+  fields = '{"date" : true}'
+)
+numSemanas <- sqldf("SELECT count(*) from numSemanas group by date")
+n<- nrow(numSemanas)
+rm(numSemanas)
+
+
+
+```
+
+#	4.4.3.	Errores producidos
+
+## 4.4.3.1.	Errores diarios
+ 
+```{r}
+
+#Reperar los errores de la bases de datpd (tag= ERROR)
+errores <- mongoDBconn$find(
+  query = '{ "level" : { "$eq" : "ERROR" } }', 
+  fields = '{"weekday" : true, "hora" : true, "time" : true, "tag":true, "idObject": true}'
+)
+
+#Agrupo por dia y hora
+freqErrores <- sqldf("SELECT weekday as dia, hora, count(*) as frecuencia  from errores group by weekday,hora")
+freqErrores$frecuencia<-freqErrores$frecuencia/n 
+
+#Agrupo y ordeno los resultados por dias de la semana
+tablaDias<- ordenarPorDiaSemanafreq(diasSemana,freqErrores,n)
+tablaDias
+
+barplot(tablaDias, col=rgb(1,0,0,1/2)
+        ,main = "Errores por hora"
+        , xlab="Hora"
+        , ylab="Errores")
+```
+
+Estadísticos descriptivos:
+```{r}
+summary(tablaDias)
+mean(tablaDias)
+var(tablaDias)
+sd(tablaDias)
+```
+
+ 
+ ## 4.4.3.2.	Errores detectados por horas
+
+Grafico de barras con las medias de errores diarios:
+```{r}
+#Grafico de barras con las medias diarias
+tablaHoras <- table(errores$hora)
+tablaHoras
+for(d in 1:length(tablaHoras)){
+  tablaHoras[[d]]<-tablaHoras[[d]]/2
+}
+tablaHoras
+
+barplot(tablaHoras, col=rgb(1,0,0,1/2)
+        ,main = "Errores por hora"
+        , xlab="Hora"
+        , ylab="Errores")
+
+```
+
+
+Estadísticos descriptivos:
+```{r}
+summary(tablaDias)
+mean(tablaDias)
+var(tablaDias)
+sd(tablaDias)
+```
+
+
+## 4.4.3.3.	Errores por horas desglosado por días de la semana
+
+Desglose por dias de la semana:
+```{r}
+#Grafico de lineas desglosado por dias y horas
+ggplot(data=freqErrores, aes(x=hora, y=frecuencia, group=dia, colour=dia)) +
+  geom_line() +
+  geom_point()+ scale_color_manual(values=coloresSemana)
+```
+
+##4.4.3.4.	Frecuencia por tipo de error
+
+```{r}
+#Errores más frecuentes
+
+recuperarError<-function(texto){
+  pos <- regexpr("=",texto)
+  if(pos>1){
+    texto <- substr(texto, pos+1, nchar(texto))
+  }
+  return(texto)
+  
+}
+
+
+erroresDesc <- mongoDBconn$find(
+  query = '{ "level" : { "$eq" : "ERROR" } }', 
+  fields = '{"tag" : true}'
+)
+erroresDesc[startsWith(erroresDesc$tag, "Validacion de la firma de la compra con id="),"tag"] <- "Validacion de la firma de la compra con id=XXX  KO"
+erroresDesc[startsWith(erroresDesc$tag, "Parameter dato is empty. Request values: sessionID="),"tag"] <- "Parameter dato is empty. Request values: sessionID=XXX"
+
+for (i in 1:nrow(erroresDesc)){ 
+  if( 
+    startsWith(erroresDesc[i,"tag"], "Se ha producido un error con la compra(")){
+    erroresDesc[i,"tag"]<-recuperarError(erroresDesc[i,"tag"])
+  }
+}
+freqErroresDesc <- sqldf("SELECT  count(*) as frecuencia, tag  from erroresDesc group by tag order by frecuencia DESC")
+
+#write.csv(freqErroresDes, file = "FrecuenciaErrores.csv",row.names=TRUE)
+
+head(freqErroresDesc)
+```
+
+
+## Errores producidos vs acciones diarias
+```{r cars}
+
+#Lineas de logs que no son de error
+peticiones <- mongoDBconn$find(
+  query = '{ "level" : { "$eq" : "INFO" } }', 
+  fields = '{"weekday" : true, "hora" : true, "time" : true}'
+)
+
+#Las agrupo por dia y hora
+freqPeticiones <- sqldf("SELECT weekday as dia, hora, count(*) as frecuenciaInfo  from peticiones group by weekday,hora")
+#Como tenemos n semanas de datos, divido las frecuencias por n para tener la media por dia/hora de la semana
+freqPeticiones$frecuenciaInfo<-freqPeticiones$frecuenciaInfo/n 
+peticiones<-sqldf("SELECT freqPeticiones.*,freqErrores.frecuencia as errores
+                  from freqPeticiones 
+                  inner join freqErrores on freqErrores.dia=freqPeticiones.dia 
+                   and freqErrores.hora=freqPeticiones.hora")
+
+#Creo un dataframe con 2 coumnas: las frecuencias de los errores y de los logs de informacion
+peticionesdatos <- peticiones
+peticionesdatos["dia"]<-NULL
+peticionesdatos["hora"]<-NULL
+
+```
+
+Matriz de correlaciones:
+```{r}
+#Analizo correlaciones
+cor(peticionesdatos)
+```
+
+El grafico de dispersión con las dos variables:
+```{r}
+#Analisis lineal
+ggplot(peticionesdatos, aes(x=frecuenciaInfo, y=errores)) +
+  geom_point(shape=1)   + ylab("Logs informativos")  + ylab("Errores") +  
+  geom_smooth()  +  ggtitle("Correlación entre trazas de error y trazas informativas")
+```
+
+
+Desconectar de MongoDB
+```{r pressure, echo=FALSE}
+rm(mongoDBconn)
+```
+
+
