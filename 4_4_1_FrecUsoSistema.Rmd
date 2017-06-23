@@ -1,0 +1,151 @@
+---
+title: "Analisis1"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+
+library(mongolite)
+library(sqldf)
+library(gsubfn)
+library(proto)
+library(RSQLite)
+library(tcltk)
+
+library(jsonlite)
+library(stringr)
+library(ggplot2)
+
+source("Soporte.R")
+
+options(stringsAsFactors = FALSE)
+
+mongoDBconn<- mongo("logs", url = "mongodb://localhost:27017/TFP")
+
+diasSemana<-c("lunes","martes","miércoles","jueves","viernes","sábado","domingo")
+coloresSemana<-c("red", "blue","pink","yellow","green", "orange","black")
+
+numSemanas <-mongoDBconn$find(
+  query = '{ "weekday" : { "$eq" : "lunes" } }', 
+  fields = '{"date" : true}'
+)
+numSemanas <- sqldf("SELECT count(*) from numSemanas group by date")
+n<- nrow(numSemanas)
+rm(numSemanas)
+
+```
+
+#4.4.1.	Frecuencias de uso del sistema
+
+##4.4.1 Peticiones diarias
+```{r}
+#Recupero el numero de peticiones agrupadas por dia de de la semana
+#y las ordeno de lunes a domingo
+numSemanas <-mongoDBconn$find(
+  query = '{ "weekday" : { "$eq" : "lunes" } }', 
+  fields = '{"date" : true}'
+)
+numSemanas <- sqldf("SELECT count(*) from numSemanas group by date")
+n<- nrow(numSemanas)
+rm(numSemanas)
+
+#Trafico total por dia de la semana
+datos <- mongoDBconn$find('{}')
+
+peticiones <- sqldf("SELECT weekday as dia, hora, count(*) as frecuencia  from datos group by weekday,hora")
+
+tablaDias<- ordenarPorDiaSemanafreq(diasSemana,peticiones,n)
+tablaDias
+
+
+barplot(tablaDias, col=rgb(0,0,1,1/2)
+        ,main = "Media peticiones por dia de la semana"
+        , xlab="Día de la semana"
+        , ylab="Peticiones")
+
+#Estadísticos descriptivos:
+min(tablaDias)
+max(tablaDias)
+median(tablaDias)
+mean(tablaDias)
+var(tablaDias)
+sd(tablaDias)
+```
+
+##4.4.1.2.	Peticiones diarias por horas
+```{r}
+tablaHoras <- table(datos$hora)
+
+for(i in 1:length(tablaHoras)) {
+  fila <- names(tablaHoras)[[i]]
+  tablaHoras[i] <- tablaHoras[i]/2
+}
+tablaHoras
+barplot(tablaHoras, col=rgb(0,0,1,1/2)
+        ,main = "Media de peticiones por hora del día"
+        , xlab="Hora"
+        , ylab="Peticiones")
+
+#Estadísticos descriptivos:
+min(tablaHoras)
+max(tablaHoras)
+median(tablaHoras)
+mean(tablaHoras)
+var(tablaHoras)
+sd(tablaHoras)
+```
+
+
+##4.4.1.3.	Peticiones diarias por horas desglosado por días de la semana
+```{r}
+desglosediashoras <- mongoDBconn$aggregate(
+  '[
+  { "$group": {
+  "_id": {
+  "dia": "$weekday",
+  "hora": "$hora"
+  },
+  "contador": { "$sum": 1 }
+  }
+  }
+  ]'
+)
+
+desglosediashoras <- data.frame("dia" = desglosediashoras$`_id`[[1]]
+                , "hora" = desglosediashoras$`_id`[[2]], "frecuencia" = desglosediashoras$contador)
+desglosediashoras$frecuencia<-desglosediashoras$frecuencia/n 
+
+
+ggplot(data=desglosediashoras, aes(x=hora, y=frecuencia, group=dia, colour=dia)) +
+  geom_line() +
+  geom_point()+ scale_color_manual(values=coloresSemana)
+```
+
+## 4.4.1.4.	Peticiones diarias por horas laborables desglosado por días de la semana
+Quitamos las horas en que no hay soporte para ver que dia/hora seria ideal para las actualizaciones de mantenimiento
+```{r}
+##Quitamos las horas en que no hay soporte para ver que dia/hora seria ideal para las actualizaciones de mantenimiento
+desglosediashoras$hora<-as.numeric(desglosediashoras$hora)
+desglosediashoras<-desglosediashoras[!(desglosediashoras$hora<8),]
+desglosediashoras<-desglosediashoras[!(desglosediashoras$hora>20),]
+desglosediashoras<-desglosediashoras[!(desglosediashoras$dia=="domingo"),]
+desglosediashoras<-desglosediashoras[!(desglosediashoras$dia=="sábado"),]
+
+coloresLaborables<-c("red", "blue","pink","yellow","green")
+ggplot(data=desglosediashoras, aes(x=hora, y=frecuencia, group=dia, colour=dia)) +
+  geom_line() +
+  geom_point()+ scale_color_manual(values=coloresSemana)
+
+desglosediashoras<-desglosediashoras[order(desglosediashoras$frecuencia),]
+head(desglosediashoras)
+
+```
+
+
+Cierro conexion
+```{r}
+rm(mongoDBconn)
+```
+
