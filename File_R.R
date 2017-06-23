@@ -8,12 +8,12 @@ options(stringsAsFactors = FALSE)
 # a cargar y cuales no
 df.Filtro <- read.csv("config/lineas.csv", header = TRUE, sep=";",encoding="utf-8",stringsAsFactors =FALSE )  
 head(df.Filtro)
-
+ 
 
 # Connect to MongoDB database.
 urlMongo <-"mongodb://localhost:27017/TFP"
-#collection <- "logs"
-collection <- "etpv"
+collection <- "logs"
+#collection <- "etpv"
 mongoDBconn<- mongo(collection, url = urlMongo )
 
 filenames <- listLogFiles("./datos", "*.log")
